@@ -1,21 +1,16 @@
 use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use ratatui::{
-    backend::CrosstermBackend,
-    Terminal,
-};
-use std::{
-    error::Error,
-    io,
-    time::{Duration, Instant},
-};
+use ratatui::{backend::CrosstermBackend, Terminal};
+use std::{error::Error, io, time::{Duration, Instant}};
 
 mod ui;
+mod utils;
 
-use ui::screens::home::{HomeScreen, HomeAction};
+use ui::screens::home::{HomeAction, HomeScreen};
+use ui::screens::file::FindFilesScreen;
 
 enum ActiveScreen {
     Home,
@@ -29,6 +24,7 @@ struct App {
     should_quit: bool,
     active_screen: ActiveScreen,
     home_screen: HomeScreen,
+    find_files_screen: FindFilesScreen,
 }
 
 impl App {
@@ -37,6 +33,7 @@ impl App {
             should_quit: false,
             active_screen: ActiveScreen::Home,
             home_screen: HomeScreen::new(),
+            find_files_screen: FindFilesScreen::new(),
         }
     }
 
@@ -53,23 +50,7 @@ impl App {
 
             if event::poll(timeout)? {
                 if let Event::Key(key) = event::read()? {
-                    if key.kind == KeyEventKind::Press {
-                        match key.code {
-                            KeyCode::Char('q') | KeyCode::Esc => {
-                                self.should_quit = true;
-                            }
-                            KeyCode::Char(c) => {
-                                if let ActiveScreen::Home = self.active_screen {
-                                    if let Some(action) = self.home_screen.handle_key(c) {
-                                        self.handle_home_action(action);
-                                    }
-                                } else if c == 'h' {
-                                    self.active_screen = ActiveScreen::Home;
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+                    self.handle_key_event(key);
                 }
             }
 
@@ -86,15 +67,51 @@ impl App {
         Ok(())
     }
 
+    fn handle_key_event(&mut self, key: KeyEvent) {
+        if key.kind == KeyEventKind::Press {
+            match key.code {
+                KeyCode::Char('q') | KeyCode::Esc => {
+                    self.should_quit = true;
+                    return;
+                }
+                _ => {}
+            }
+        }
+
+        match self.active_screen {
+            ActiveScreen::Home => {
+                if key.kind == KeyEventKind::Press {
+                    if let KeyCode::Char(c) = key.code {
+                        if let Some(action) = self.home_screen.handle_key(c) {
+                            self.handle_home_action(action);
+                        }
+                    }
+                }
+            }
+            ActiveScreen::FindFiles => {
+                if key.kind == KeyEventKind::Press {
+                    if let KeyCode::Char('h') = key.code {
+                        self.active_screen = ActiveScreen::Home;
+                        return;
+                    }
+                }
+                self.find_files_screen.handle_key_event(key);
+            }
+            ActiveScreen::Stats | ActiveScreen::Config | ActiveScreen::About => {
+                if key.kind == KeyEventKind::Press {
+                    if let KeyCode::Char('h') = key.code {
+                        self.active_screen = ActiveScreen::Home;
+                    }
+                }
+            }
+        }
+    }
+
     fn ui(&mut self, f: &mut ratatui::Frame) {
         let area = f.area();
         match self.active_screen {
             ActiveScreen::Home => self.home_screen.render(f, area),
-            ActiveScreen::FindFiles => {
-                let block = ratatui::widgets::Paragraph::new("Find Files Screen (press 'h' to go back)")
-                    .alignment(ratatui::layout::Alignment::Center);
-                f.render_widget(block, area);
-            }
+            ActiveScreen::FindFiles => self.find_files_screen.render(f, area),
             ActiveScreen::Stats => {
                 let block = ratatui::widgets::Paragraph::new("Stats Screen (press 'h' to go back)")
                     .alignment(ratatui::layout::Alignment::Center);
@@ -115,7 +132,9 @@ impl App {
 
     fn handle_home_action(&mut self, action: HomeAction) {
         match action {
-            HomeAction::FindFiles => self.active_screen = ActiveScreen::FindFiles,
+            HomeAction::FindFiles => {
+                self.active_screen = ActiveScreen::FindFiles;
+            }
             HomeAction::Stats => self.active_screen = ActiveScreen::Stats,
             HomeAction::Config => self.active_screen = ActiveScreen::Config,
             HomeAction::About => self.active_screen = ActiveScreen::About,
@@ -150,5 +169,3 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
-

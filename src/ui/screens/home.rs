@@ -6,19 +6,8 @@ use ratatui::{
     Frame,
 };
 
-const LOGO_LINES: &[&str] = &[
-    " █████ █████                           ███   ███            ",
-    "▒▒███ ▒▒███                           ▒▒▒   ▒▒▒             ",
-    " ▒▒███ ███    ██████   ████████       █████ ████  █████ ████",
-    "  ▒▒█████    ▒▒▒▒▒███ ▒▒███▒▒███     ▒▒███ ▒▒███ ▒▒███ ▒███ ",
-    "   ▒▒███      ███████  ▒███ ▒███      ▒███  ▒███  ▒███ ▒███ ",
-    "    ▒███     ███▒▒███  ▒███ ▒███      ▒███  ▒███  ▒███ ▒███ ",
-    "    █████   ▒▒████████ ████ █████     ▒███  █████ ▒▒████████",
-    "   ▒▒▒▒▒     ▒▒▒▒▒▒▒▒ ▒▒▒▒ ▒▒▒▒▒      ▒███ ▒▒▒▒▒   ▒▒▒▒▒▒▒▒ ",
-    "                                  ███ ▒███                  ",
-    "                                 ▒▒██████                   ",
-    "                                  ▒▒▒▒▒▒                    ",
-];
+
+use crate::utils::logo::YanjiuLogo;
 
 
 struct MenuItem {
@@ -121,7 +110,7 @@ impl HomeScreen {
     }
 
     fn render_logo(&self, frame: &mut Frame, area: Rect) {
-        let logo_width = LOGO_LINES.iter().map(|line| line.len()).max().unwrap_or(0) as u16;
+        let logo_width = YanjiuLogo::lines().iter().map(|line| line.len()).max().unwrap_or(0) as u16;
 
         let logo_area = if area.width > logo_width + 4 {
             let margin = (area.width - logo_width) / 2;
@@ -139,7 +128,7 @@ impl HomeScreen {
         };
 
         let logo_text = Text::from_iter(
-            LOGO_LINES
+            YanjiuLogo::lines()
                 .iter()
                 .map(|line| Line::from(Span::styled(*line, Style::default().fg(Color::Cyan)))),
         );

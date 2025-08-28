@@ -100,6 +100,7 @@ impl App {
 
     fn ui(&mut self, f: &mut ratatui::Frame) {
         let area = f.area();
+
         match self.active_screen {
             ActiveScreen::Home => {
                 self.home_screen.render(f, area);
@@ -116,12 +117,12 @@ impl App {
                 }
             }
             ActiveScreen::Stats => {
-                let block = Paragraph::new("Stats Screen (press 'h' or 'Esc' to go back)")
+                let block = Paragraph::new("Stats Screen (press 'q' or 'Esc' to go back)")
                     .alignment(Alignment::Center);
                 f.render_widget(block, area);
             }
             ActiveScreen::Config => {
-                let block = Paragraph::new("Config Screen (press 'h' or 'Esc' to go back)")
+                let block = Paragraph::new("Config Screen (press 'q' or 'Esc' to go back)")
                     .alignment(Alignment::Center);
                 f.render_widget(block, area);
             }

@@ -1,20 +1,22 @@
-use crossterm::{
+use ratatui::crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEvent, KeyEventKind},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
-use std::{error::Error, io, time::{Duration, Instant}};
+use std::{error::Error, io};
+use ratatui::widgets::Paragraph;
+use ratatui::layout::Alignment;
 
+use ui::screens::home::{HomeAction, HomeScreen};
+use ui::screens::about::AboutScreen;
+use utils::picker::create_file_explorer;
 mod ui;
 mod utils;
 
-use ui::screens::home::{HomeAction, HomeScreen};
-use ui::screens::file::FindFilesScreen;
-
 enum ActiveScreen {
     Home,
-    FindFiles,
+    FilePicker,
     Stats,
     Config,
     About,
@@ -24,7 +26,9 @@ struct App {
     should_quit: bool,
     active_screen: ActiveScreen,
     home_screen: HomeScreen,
-    find_files_screen: FindFilesScreen,
+    last_selected_file: Option<String>,
+    file_explorer: Option<ratatui_explorer::FileExplorer>,
+    about_screen: AboutScreen,
 }
 
 impl App {
@@ -33,116 +37,116 @@ impl App {
             should_quit: false,
             active_screen: ActiveScreen::Home,
             home_screen: HomeScreen::new(),
-            find_files_screen: FindFilesScreen::new(),
+            last_selected_file: None,
+            file_explorer: None,
+            about_screen: AboutScreen::new(),
         }
     }
 
     fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> Result<(), Box<dyn Error>> {
-        let mut last_tick = Instant::now();
-        let tick_rate = Duration::from_millis(250);
-
         loop {
             terminal.draw(|f| self.ui(f))?;
 
-            let timeout = tick_rate
-                .checked_sub(last_tick.elapsed())
-                .unwrap_or_else(|| Duration::from_secs(0));
-
-            if event::poll(timeout)? {
-                if let Event::Key(key) = event::read()? {
-                    self.handle_key_event(key);
+            if let Event::Key(key) = event::read()? {
+                if key.kind == KeyEventKind::Press {
+                    self.handle_key_event(key)?;
                 }
-            }
-
-            if last_tick.elapsed() >= tick_rate {
-                self.on_tick();
-                last_tick = Instant::now();
             }
 
             if self.should_quit {
                 break;
             }
         }
-
         Ok(())
     }
 
-    fn handle_key_event(&mut self, key: KeyEvent) {
-        if key.kind == KeyEventKind::Press {
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => {
-                    self.should_quit = true;
-                    return;
-                }
-                _ => {}
-            }
-        }
-
+    fn handle_key_event(&mut self, key: KeyEvent) -> Result<(), Box<dyn Error>> {
         match self.active_screen {
             ActiveScreen::Home => {
-                if key.kind == KeyEventKind::Press {
-                    if let KeyCode::Char(c) = key.code {
-                        if let Some(action) = self.home_screen.handle_key(c) {
-                            self.handle_home_action(action);
+                if let KeyCode::Char(c) = key.code {
+                    if let Some(action) = self.home_screen.handle_key(c) {
+                        self.handle_home_action(action)?;
+                    }
+                }
+            }
+            ActiveScreen::FilePicker => {
+                if let Some(explorer) = self.file_explorer.as_mut() {
+                    explorer.handle(&Event::Key(key))?;
+
+                    if key.code == KeyCode::Enter {
+                        if let Some(path) = explorer.current().path().to_str() {
+                            self.last_selected_file = Some(path.to_string());
+                            self.file_explorer = None;
+                            self.active_screen = ActiveScreen::Home;
                         }
                     }
-                }
-            }
-            ActiveScreen::FindFiles => {
-                if key.kind == KeyEventKind::Press {
-                    if let KeyCode::Char('h') = key.code {
-                        self.active_screen = ActiveScreen::Home;
-                        return;
-                    }
-                }
-                self.find_files_screen.handle_key_event(key);
-            }
-            ActiveScreen::Stats | ActiveScreen::Config | ActiveScreen::About => {
-                if key.kind == KeyEventKind::Press {
-                    if let KeyCode::Char('h') = key.code {
+
+                    if key.code == KeyCode::Esc || key.code == KeyCode::Char('q') {
+                        self.file_explorer = None;
                         self.active_screen = ActiveScreen::Home;
                     }
+                }
+            }
+            ActiveScreen::About => {
+                if let KeyCode::Char('h') | KeyCode::Esc = key.code {
+                    self.active_screen = ActiveScreen::Home;
+                }
+            }
+            ActiveScreen::Stats | ActiveScreen::Config => {
+                if let KeyCode::Char('h') | KeyCode::Esc = key.code {
+                    self.active_screen = ActiveScreen::Home;
                 }
             }
         }
+        Ok(())
     }
 
     fn ui(&mut self, f: &mut ratatui::Frame) {
         let area = f.area();
         match self.active_screen {
-            ActiveScreen::Home => self.home_screen.render(f, area),
-            ActiveScreen::FindFiles => self.find_files_screen.render(f, area),
+            ActiveScreen::Home => {
+                self.home_screen.render(f, area);
+
+                if let Some(selected) = &self.last_selected_file {
+                    let text = Paragraph::new(format!("Last selected file: {}", selected))
+                        .alignment(Alignment::Center);
+                    f.render_widget(text, area);
+                }
+            }
+            ActiveScreen::FilePicker => {
+                if let Some(explorer) = &self.file_explorer {
+                    f.render_widget(&explorer.widget(), area);
+                }
+            }
             ActiveScreen::Stats => {
-                let block = ratatui::widgets::Paragraph::new("Stats Screen (press 'h' to go back)")
-                    .alignment(ratatui::layout::Alignment::Center);
+                let block = Paragraph::new("Stats Screen (press 'h' or 'Esc' to go back)")
+                    .alignment(Alignment::Center);
                 f.render_widget(block, area);
             }
             ActiveScreen::Config => {
-                let block = ratatui::widgets::Paragraph::new("Config Screen (press 'h' to go back)")
-                    .alignment(ratatui::layout::Alignment::Center);
+                let block = Paragraph::new("Config Screen (press 'h' or 'Esc' to go back)")
+                    .alignment(Alignment::Center);
                 f.render_widget(block, area);
             }
             ActiveScreen::About => {
-                let block = ratatui::widgets::Paragraph::new("About Screen (press 'h' to go back)")
-                    .alignment(ratatui::layout::Alignment::Center);
-                f.render_widget(block, area);
+                self.about_screen.render(f, area);
             }
         }
     }
 
-    fn handle_home_action(&mut self, action: HomeAction) {
+    fn handle_home_action(&mut self, action: HomeAction) -> Result<(), Box<dyn Error>> {
         match action {
             HomeAction::FindFiles => {
-                self.active_screen = ActiveScreen::FindFiles;
+                self.file_explorer = Some(create_file_explorer()?);
+                self.active_screen = ActiveScreen::FilePicker;
             }
             HomeAction::Stats => self.active_screen = ActiveScreen::Stats,
             HomeAction::Config => self.active_screen = ActiveScreen::Config,
             HomeAction::About => self.active_screen = ActiveScreen::About,
             HomeAction::Quit => self.should_quit = true,
         }
+        Ok(())
     }
-
-    fn on_tick(&mut self) {}
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -156,11 +160,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let res = app.run(&mut terminal);
 
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+    execute!(terminal.backend_mut(), LeaveAlternateScreen, DisableMouseCapture)?;
     terminal.show_cursor()?;
 
     if let Err(err) = res {

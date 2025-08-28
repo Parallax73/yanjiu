@@ -8,9 +8,11 @@ use std::{error::Error, io};
 use ratatui::widgets::Paragraph;
 use ratatui::layout::Alignment;
 
-use ui::screens::home::{HomeAction, HomeScreen};
+use ui::screens::home::HomeScreen;
 use ui::screens::about::AboutScreen;
 use utils::picker::create_file_explorer;
+use utils::actions::{Actions, HomeAction};
+
 mod ui;
 mod utils;
 
@@ -64,7 +66,7 @@ impl App {
         match self.active_screen {
             ActiveScreen::Home => {
                 if let KeyCode::Char(c) = key.code {
-                    if let Some(action) = self.home_screen.handle_key(c) {
+                    if let Some(action) = HomeAction::new().handle_actions(c) {
                         self.handle_home_action(action)?;
                     }
                 }
@@ -87,13 +89,8 @@ impl App {
                     }
                 }
             }
-            ActiveScreen::About => {
-                if let KeyCode::Char('h') | KeyCode::Esc = key.code {
-                    self.active_screen = ActiveScreen::Home;
-                }
-            }
-            ActiveScreen::Stats | ActiveScreen::Config => {
-                if let KeyCode::Char('h') | KeyCode::Esc = key.code {
+            ActiveScreen::About | ActiveScreen::Stats | ActiveScreen::Config => {
+                if let KeyCode::Char('q') | KeyCode::Esc = key.code  {
                     self.active_screen = ActiveScreen::Home;
                 }
             }
@@ -134,16 +131,16 @@ impl App {
         }
     }
 
-    fn handle_home_action(&mut self, action: HomeAction) -> Result<(), Box<dyn Error>> {
+    fn handle_home_action(&mut self, action: Actions) -> Result<(), Box<dyn Error>> {
         match action {
-            HomeAction::FindFiles => {
+            Actions::FindFiles => {
                 self.file_explorer = Some(create_file_explorer()?);
                 self.active_screen = ActiveScreen::FilePicker;
             }
-            HomeAction::Stats => self.active_screen = ActiveScreen::Stats,
-            HomeAction::Config => self.active_screen = ActiveScreen::Config,
-            HomeAction::About => self.active_screen = ActiveScreen::About,
-            HomeAction::Quit => self.should_quit = true,
+            Actions::Stats => self.active_screen = ActiveScreen::Stats,
+            Actions::Config => self.active_screen = ActiveScreen::Config,
+            Actions::About => self.active_screen = ActiveScreen::About,
+            Actions::Quit => self.should_quit = true,
         }
         Ok(())
     }

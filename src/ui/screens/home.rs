@@ -202,23 +202,4 @@ impl HomeScreen {
 
         frame.render_widget(paragraph, area);
     }
-
-    pub fn handle_key(&self, key: char) -> Option<HomeAction> {
-        match key {
-            'f' => Some(HomeAction::FindFiles),
-            's' => Some(HomeAction::Stats),
-            'c' => Some(HomeAction::Config),
-            'a' => Some(HomeAction::About),
-            'q' => Some(HomeAction::Quit),
-            _ => None,
-        }
-    }
-}
-
-pub enum HomeAction {
-    FindFiles,
-    Stats,
-    Config,
-    About,
-    Quit,
 }
